@@ -1,11 +1,12 @@
 package main
 
 import (
-	"docxparser"
 	"fmt"
 	"log"
 	"time"
-	"xlsxparser"
+
+	"github.com/rsravanreddy/go-office-parser/docxparser"
+	"github.com/rsravanreddy/go-office-parser/xlsxparser"
 )
 
 func main() {

@@ -8,7 +8,8 @@ import (
 	"io"
 	"log"
 	"strings"
-	"util"
+
+	"github.com/rsravanreddy/go-office-parser/util"
 )
 
 type document struct {

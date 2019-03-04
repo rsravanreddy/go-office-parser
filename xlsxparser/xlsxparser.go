@@ -8,7 +8,8 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"util"
+
+	"github.com/rsravanreddy/go-office-parser/util"
 )
 
 type sheetNumbers struct {

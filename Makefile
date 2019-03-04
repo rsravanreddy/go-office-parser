@@ -9,14 +9,14 @@ export GOPATH
 default: build
 
 build:
-	go build -v -o ./run ./src/*.go
+	go build -v -o ./run ./*.go
 
 doc:
     godoc -http=:6060 -index
 
 # http://golang.org/cmd/go/#hdr-Run_gofmt_on_package_sources
 fmt:
-	go fmt ./src/...
+	go fmt ./...
 
 # https://github.com/golang/lint
 # go get github.com/golang/lint/golint
@@ -30,7 +30,7 @@ run: clean build
 	./run 1
 
 test:
-	go test ./src/*/
+	go test ./*.go
 
 vendor_clean:
 	rm -dRf ./_vendor
