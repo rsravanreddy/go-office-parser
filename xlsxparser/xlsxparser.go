@@ -64,12 +64,11 @@ func Parse(path string) (parsedString string, err error) {
 	}
 	var r *zip.ReadCloser
 	r, err = zip.OpenReader(path)
-	defer r.Close()
 	if err != nil || r == nil {
 		return parsedString, err
 	}
+	defer r.Close()
 	// Iterate through the files in the archive,
-
 	file, sharedStringFile := util.RetrieveWorkBook(r.File)
 
 	if file == nil || sharedStringFile == nil {

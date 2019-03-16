@@ -42,10 +42,10 @@ func Parse(path string) (result string, err error) {
 		return result, errors.New("file does not exist")
 	}
 	r, err := zip.OpenReader(path)
-	defer r.Close()
 	if err != nil || r == nil {
 		return result, err
 	}
+	defer r.Close()
 	if err != nil {
 		return result, err
 	}
