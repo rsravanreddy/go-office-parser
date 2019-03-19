@@ -1,4 +1,4 @@
-package xlsxparser
+package parser
 
 import (
 	"archive/zip"
@@ -11,6 +11,40 @@ import (
 
 	"github.com/rsravanreddy/go-office-parser/util"
 )
+
+type XlsxReader struct {
+	err    error
+	data   []byte
+	offset int
+	length int
+}
+
+func NewXlsxReader(path string) *XlsxReader {
+	dr := &XlsxReader{}
+	dr.offset = 0
+	dr.length = 0
+	var data string
+	data, dr.err = dr.parse(path)
+	dr.data = make([]byte, len(data))
+	copy(dr.data[:], data[:])
+	dr.length = len(dr.data)
+	return dr
+}
+
+func (r *XlsxReader) Read(b []byte) (int, error) {
+
+	if r.err != nil {
+		return 0, r.err
+	}
+	if r.offset-r.length == 0 {
+		return 0, io.EOF
+	}
+	len := util.Min(len(b), r.length-r.offset)
+	copy(b[:], r.data[r.offset:])
+	r.offset = r.offset + len
+	return len, nil
+
+}
 
 type sheetNumbers struct {
 	SheetNumber sheetNumber `xml:"sheets"`
@@ -58,7 +92,8 @@ func (sn *sheetNumber) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err
 }
 
 //Parse .. paerses an excel file and returns as a formatted string
-func Parse(path string) (parsedString string, err error) {
+func (dr *XlsxReader) parse(path string) (parsedString string, err error) {
+	parsedString = ""
 	if !util.FileExists(path) {
 		return parsedString, errors.New("file does not exist")
 	}
@@ -68,7 +103,9 @@ func Parse(path string) (parsedString string, err error) {
 		return parsedString, err
 	}
 	defer r.Close()
+
 	// Iterate through the files in the archive,
+
 	file, sharedStringFile := util.RetrieveWorkBook(r.File)
 
 	if file == nil || sharedStringFile == nil {

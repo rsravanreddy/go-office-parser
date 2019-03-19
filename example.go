@@ -2,33 +2,49 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"time"
 
-	"github.com/rsravanreddy/go-office-parser/docxparser"
-	"github.com/rsravanreddy/go-office-parser/xlsxparser"
+	"io"
+
+	"github.com/rsravanreddy/go-office-parser/parser"
 )
 
 func main() {
-	start := time.Now()
 
-	res, err := docxparser.Parse("./testdata/demo.docx")
+	var dr io.Reader
+	dr = parser.NewDocxReader("./testdata/demo.docx")
 
-	if err == nil {
-		fmt.Println(res)
-	} else {
-		fmt.Println(err)
-
+	buf := make([]byte, 4000)
+	s := ""
+	for {
+		n, err := dr.Read(buf)
+		s += string(buf[:n])
+		if err == io.EOF {
+			break
+		}
 	}
+	fmt.Println(s)
 
-	res, err = xlsxparser.Parse("./testdata/sample.xlsx")
-	elapsed := time.Since(start)
-	log.Printf("parsing took %s", elapsed)
-	if err == nil {
-		fmt.Println(res)
-	} else {
-		fmt.Println(err)
+	dr = parser.NewXlsxReader("./testdata/sample.xlsx")
 
+	buf = make([]byte, 4000)
+	s = ""
+	for {
+		n, err := dr.Read(buf)
+		s += string(buf[:n])
+		if err == io.EOF {
+			break
+		}
 	}
+	fmt.Println(s)
+
+	// res, err := xlsxparser.Parse("./testdata/sample.xlsx")
+	// elapsed := time.Since(start)
+	// log.Printf("parsing took %s", elapsed)
+	// if err == nil {
+	// 	fmt.Println(res)
+	// } else {
+	// 	fmt.Println(err)
+
+	// }
 
 }
