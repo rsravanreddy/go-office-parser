@@ -7,6 +7,13 @@ import (
 	"strings"
 )
 
+func Min(x, y int) int {
+	if x < y {
+		return x
+	}
+	return y
+}
+
 //ReadFile ...
 func ReadFile(r io.Reader) (res string, err error) {
 	var sb strings.Builder
