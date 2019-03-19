@@ -33,12 +33,11 @@ var expectedXlsxParsedString = `
 func TestXlsxParse(t *testing.T) {
 	path, _ := filepath.Abs("../testdata/sample.xlsx")
 
-	dr := NewXlsxReader(path)
+	dr, err := NewXlsxReader(path)
 
 	buf := make([]byte, 4000)
 	parsedString := ""
 	var n int
-	var err error
 	for {
 		n, err = dr.Read(buf)
 		parsedString += string(buf[:n])
@@ -60,12 +59,11 @@ func TestXlsxParse(t *testing.T) {
 func TestDocxParse(t *testing.T) {
 	path, _ := filepath.Abs("../testdata/demo.docx")
 
-	dr := NewDocxReader(path)
+	dr, err := NewDocxReader(path)
 
 	buf := make([]byte, 4000)
 	parsedString := ""
 	var n int
-	var err error
 	for {
 		n, err = dr.Read(buf)
 		parsedString += string(buf[:n])
@@ -87,12 +85,14 @@ func TestDocxParse(t *testing.T) {
 func TestDocxParseNofile(t *testing.T) {
 	path, _ := filepath.Abs("../testdata/demo.docx1")
 
-	dr := NewDocxReader(path)
+	dr, err := NewDocxReader(path)
+	if err == nil {
+		t.Fail()
+	}
 
 	buf := make([]byte, 4000)
 	parsedString := ""
 	var n int
-	var err error
 	for {
 		n, err = dr.Read(buf)
 		parsedString += string(buf[:n])
@@ -107,14 +107,15 @@ func TestDocxParseNofile(t *testing.T) {
 
 func TestDocxParseNonOfficefile(t *testing.T) {
 	path, _ := filepath.Abs("../testdata/non-office")
-
 	var dr io.Reader
-	dr = NewDocxReader(path)
-
+	var err error
+	dr, err = NewDocxReader(path)
+	if err == nil {
+		t.Fail()
+	}
 	buf := make([]byte, 4000)
 	parsedString := ""
 	var n int
-	var err error
 	for {
 		n, err = dr.Read(buf)
 		parsedString += string(buf[:n])
@@ -126,7 +127,11 @@ func TestDocxParseNonOfficefile(t *testing.T) {
 		t.Fail()
 	}
 
-	dr = NewXlsxReader(path)
+	dr, err = NewXlsxReader(path)
+
+	if err == nil {
+		t.Fail()
+	}
 
 	for {
 		n, err = dr.Read(buf)

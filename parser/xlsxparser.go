@@ -19,7 +19,7 @@ type XlsxReader struct {
 	length int
 }
 
-func NewXlsxReader(path string) *XlsxReader {
+func NewXlsxReader(path string) (*XlsxReader, error) {
 	dr := &XlsxReader{}
 	dr.offset = 0
 	dr.length = 0
@@ -28,7 +28,7 @@ func NewXlsxReader(path string) *XlsxReader {
 	dr.data = make([]byte, len(data))
 	copy(dr.data[:], data[:])
 	dr.length = len(dr.data)
-	return dr
+	return dr, dr.err
 }
 
 func (r *XlsxReader) Read(b []byte) (int, error) {

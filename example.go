@@ -11,7 +11,7 @@ import (
 func main() {
 
 	var dr io.Reader
-	dr = parser.NewDocxReader("./testdata/demo.docx")
+	dr, _ = parser.NewDocxReader("./testdata/demo.docx")
 
 	buf := make([]byte, 4000)
 	s := ""
@@ -24,7 +24,7 @@ func main() {
 	}
 	fmt.Println(s)
 
-	dr = parser.NewXlsxReader("./testdata/sample.xlsx")
+	dr, _ = parser.NewXlsxReader("./testdata/sample.xlsx")
 
 	buf = make([]byte, 4000)
 	s = ""

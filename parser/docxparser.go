@@ -19,7 +19,7 @@ type DocxReader struct {
 	length int
 }
 
-func NewDocxReader(path string) *DocxReader {
+func NewDocxReader(path string) (*DocxReader, error) {
 	dr := &DocxReader{}
 	dr.offset = 0
 	dr.length = 0
@@ -28,7 +28,7 @@ func NewDocxReader(path string) *DocxReader {
 	dr.data = make([]byte, len(data))
 	copy(dr.data[:], data[:])
 	dr.length = len(dr.data)
-	return dr
+	return dr, dr.err
 }
 
 func (r *DocxReader) Read(b []byte) (int, error) {
