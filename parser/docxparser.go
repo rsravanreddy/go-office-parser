@@ -13,21 +13,18 @@ import (
 )
 
 type DocxReader struct {
-	err    error
-	data   []byte
-	offset int
-	length int
+	err      error
+	data     []byte
+	offset   int
+	xmlIndex int
+	decoder  *xml.Decoder
 }
 
 func NewDocxReader(path string) (*DocxReader, error) {
 	dr := &DocxReader{}
 	dr.offset = 0
-	dr.length = 0
-	var data string
-	data, dr.err = dr.parse(path)
-	dr.data = make([]byte, len(data))
-	copy(dr.data[:], data[:])
-	dr.length = len(dr.data)
+	dr.xmlIndex = 0
+	dr.err = dr.parse(path)
 	return dr, dr.err
 }
 
@@ -36,14 +33,26 @@ func (r *DocxReader) Read(b []byte) (int, error) {
 	if r.err != nil {
 		return 0, r.err
 	}
-	if r.offset-r.length == 0 {
-		return 0, io.EOF
+	//need to fill
+	var err error
+	var lenRead int
+	if r.offset+len(b) > len(r.data) {
+		lenRead, err = r.FillFromXml(r.offset + len(b) - len(r.data))
 	}
-	len := util.Min(len(b), r.length-r.offset)
+	if err != nil && lenRead == 0 {
+		return 0, err
+	}
+	len := util.Min(len(b), len(r.data)-r.offset)
 	copy(b[:], r.data[r.offset:])
-	r.offset = r.offset + len
+	//r.offset = r.offset + len
+	r.data = r.data[len:]
 	return len, nil
 
+}
+
+func (r *DocxReader) Close() error {
+	r.err = errors.New("reader already closed")
+	return nil
 }
 
 type document struct {
@@ -71,30 +80,34 @@ type record struct {
 }
 
 // Parse ... parses a word document and returns a string
-func (dr *DocxReader) parse(path string) (data string, err error) {
+func (dr *DocxReader) parse(path string) (err error) {
 	if !util.FileExists(path) {
-		return data, errors.New("file does not exist")
+		return errors.New("file does not exist")
 	}
 	r, err := zip.OpenReader(path)
 	if err != nil || r == nil {
-		return data, err
+		return err
 	}
 	defer r.Close()
 	if err != nil {
-		return data, err
+		return err
 	}
 
 	file := util.RetrieveWordDoc(r.File)
 
 	if file == nil {
-		return data, errors.New("file is not valid docx")
+		return errors.New("file is not valid docx")
 	}
 
 	rc, err := file.Open()
+	if rc != nil {
+		defer rc.Close()
+	}
 	if err != nil {
-		return data, err
+		return err
 
 	}
+
 	ByteData, _ := util.ReadFile(rc)
 
 	// read our opened xmlFile as a byte array.
@@ -110,24 +123,38 @@ func (dr *DocxReader) parse(path string) (data string, err error) {
 
 	err = xml.Unmarshal([]byte(doc.Wp.InnerXML), &b)
 	if err != nil {
-		return data, errors.New("file is not valid docx")
+		return errors.New("file is not valid docx")
 
 	}
 
-	d := xml.NewDecoder(bytes.NewBufferString(doc.Wp.InnerXML))
+	dr.decoder = xml.NewDecoder(bytes.NewBufferString(doc.Wp.InnerXML))
+	return err
+}
+
+func (dr *DocxReader) FillFromXml(minSize int) (int, error) {
+	var err error
+	var data string
+	var dataSize int
 	for {
+
+		if dataSize > minSize {
+			break
+		}
 		var t wp
-		err := d.Decode(&t)
+		err = dr.decoder.Decode(&t)
 		if err == io.EOF {
 			break
 		}
 		if err == nil {
 			for _, element := range t.Records {
 				sa := []string{data, element.Value}
+				dataSize += len([]byte(element.Value)) + 1
 				data = strings.Join(sa, " ")
 			}
 		}
-
 	}
-	return data, err
+	byteData := []byte(data)
+	dr.data = append(dr.data, byteData...)
+	dataSize += len(byteData)
+	return dataSize, err
 }
