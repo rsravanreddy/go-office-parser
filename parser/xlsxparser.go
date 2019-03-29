@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"encoding/xml"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"strconv"
@@ -61,7 +60,6 @@ func (r *XlsxReader) Read(b []byte) (int, error) {
 
 func (r *XlsxReader) Close() error {
 	r.err = errors.New("reader already closed")
-	fmt.Printf("length of shared srings %d", len(r.sharedStringsValue.SharedString))
 	r.sharedStringsValue.SharedString = nil
 	r.zipReader.Close()
 	return nil
