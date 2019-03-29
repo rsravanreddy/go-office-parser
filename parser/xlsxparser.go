@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"strconv"
@@ -13,37 +14,57 @@ import (
 )
 
 type XlsxReader struct {
-	err    error
-	data   []byte
-	offset int
-	length int
+	err                error
+	data               []byte
+	offset             int
+	length             int
+	sharedStringsValue sharedStrings
+	sheetNumberValue   int
+	rowValue           int
+	colValue           int
+	key                int
+	shd                *sheetsData
+	zipReader          *zip.ReadCloser
+	numberOfSheets     int
 }
 
 func NewXlsxReader(path string) (*XlsxReader, error) {
 	dr := &XlsxReader{}
 	dr.offset = 0
 	dr.length = 0
-	var data string
-	data, dr.err = dr.parse(path)
-	dr.data = make([]byte, len(data))
-	copy(dr.data[:], data[:])
-	dr.length = len(dr.data)
+	dr.key = 1
+	dr.err = dr.parse(path)
 	return dr, dr.err
 }
 
 func (r *XlsxReader) Read(b []byte) (int, error) {
 
-	if r.err != nil {
+	if r.err != nil || r.err == io.EOF {
 		return 0, r.err
 	}
-	if r.offset-r.length == 0 {
-		return 0, io.EOF
+	//need to fill
+	var err error
+	var lenRead int
+	if r.offset+len(b) > len(r.data) {
+		lenRead, err = r.FillFromXml(r.offset + len(b) - len(r.data))
 	}
-	len := util.Min(len(b), r.length-r.offset)
+	if err != nil && lenRead == 0 {
+		return 0, err
+	}
+	len := util.Min(len(b), len(r.data)-r.offset)
 	copy(b[:], r.data[r.offset:])
-	r.offset = r.offset + len
+	//r.offset = r.offset + len
+	r.data = r.data[len:]
 	return len, nil
 
+}
+
+func (r *XlsxReader) Close() error {
+	r.err = errors.New("reader already closed")
+	fmt.Printf("length of shared srings %d", len(r.sharedStringsValue.SharedString))
+	r.sharedStringsValue.SharedString = nil
+	r.zipReader.Close()
+	return nil
 }
 
 type sheetNumbers struct {
@@ -92,48 +113,49 @@ func (sn *sheetNumber) UnmarshalXML(d *xml.Decoder, start xml.StartElement) (err
 }
 
 //Parse .. paerses an excel file and returns as a formatted string
-func (dr *XlsxReader) parse(path string) (parsedString string, err error) {
-	parsedString = ""
+func (dr *XlsxReader) parse(path string) (err error) {
 	if !util.FileExists(path) {
-		return parsedString, errors.New("file does not exist")
+		return errors.New("file does not exist")
 	}
-	var r *zip.ReadCloser
-	r, err = zip.OpenReader(path)
-	if err != nil || r == nil {
-		return parsedString, err
+	dr.zipReader, err = zip.OpenReader(path)
+	if err != nil || dr.zipReader == nil {
+		return err
 	}
-	defer r.Close()
-
 	// Iterate through the files in the archive,
 
-	file, sharedStringFile := util.RetrieveWorkBook(r.File)
+	file, sharedStringFile := util.RetrieveWorkBook(dr.zipReader.File)
 
 	if file == nil || sharedStringFile == nil {
-		return parsedString, errors.New("file is not valid xlsx")
+		return errors.New("file is not valid xlsx")
 	}
 
 	rc, err := file.Open()
+	if rc != nil {
+		defer rc.Close()
+	}
 	if err != nil {
-		return "", err
+		return err
 
 	}
+
 	data, _ := util.ReadFile(rc)
 
 	if err != nil {
-		return "", err
+		return err
 	}
 
-	rc, err = sharedStringFile.Open()
+	src, err := sharedStringFile.Open()
+	if src != nil {
+		defer src.Close()
+	}
 	if err != nil {
-		return "", err
+		return err
 
 	}
 
-	strData, _ := util.ReadFile(rc)
+	strData, _ := util.ReadFile(src)
 
-	var sr sharedStrings
-
-	err = xml.Unmarshal([]byte(strData), &sr)
+	err = xml.Unmarshal([]byte(strData), &dr.sharedStringsValue)
 
 	if err != nil {
 		log.Println(err)
@@ -145,50 +167,90 @@ func (dr *XlsxReader) parse(path string) (parsedString string, err error) {
 	sheets := sheetNumbers{}
 
 	err = xml.Unmarshal(byteValue, &sheets)
-	values := []string{}
-	for key := range sheets.SheetNumber.Elems {
-		values = append(values, key)
-		f := util.RetrieveSheetWithNumber(r.File, key)
-		if f != nil {
-			rcc, err := f.Open()
-			if err != nil {
-				continue
-			}
-			sharedStringsData, _ := util.ReadFile(rcc)
-			var shd sheetsData
-			err = xml.Unmarshal([]byte(sharedStringsData), &shd)
+	dr.numberOfSheets = len(sheets.SheetNumber.Elems)
 
-			if err != nil {
-				continue
+	return err
+}
 
-			}
-			for _, sheetData := range shd.SheetData {
-				for i, row := range sheetData.Row {
-					rowString := ""
-					for _, col := range row.Col {
-						if col.Key == "inlineStr" {
-							sa := []string{rowString, col.InlineStr.Value}
-							rowString = strings.Join(sa, " ")
-						}
-						if col.Key == "n" || col.Key == "" {
-							sa := []string{rowString, col.Value}
-							rowString = strings.Join(sa, " ")
-						}
-						if col.Key == "s" {
-							strngIndex, _ := strconv.ParseInt(col.Value, 10, 64)
-							sa := []string{rowString, sr.SharedString[strngIndex].Text}
-							rowString = strings.Join(sa, " ")
-						}
-					}
-					delimiter := "\n"
-					if i == 0 {
-						delimiter = ""
-					}
-					parsedString = strings.Join([]string{parsedString, rowString}, delimiter)
-				}
+func (dr *XlsxReader) FillFromXml(minSize int) (dataSize int, err error) {
+	var totalSizeRead int
+	for key := dr.key; key <= dr.numberOfSheets; key++ {
+		dr.key = key
+		sizeRead, err := dr.parseSheet(minSize - totalSizeRead)
+		totalSizeRead += sizeRead
+		if totalSizeRead >= minSize {
+			break
+		}
+		if err != nil {
+			continue
+		}
+		dr.sheetNumberValue = key
+	}
+	return totalSizeRead, err
+}
+
+func (dr *XlsxReader) parseSheet(minSize int) (dataSize int, err error) {
+	var data string
+	if dr.shd == nil {
+		f := util.RetrieveSheetWithNumber(dr.zipReader.File, strconv.Itoa(dr.key))
+		var rcc io.ReadCloser
+		rcc, err = f.Open()
+		if rcc != nil {
+			defer rcc.Close()
+		}
+		if err == nil {
+			xmlSheetData, _ := util.ReadFile(rcc)
+			if dr.shd == nil {
+				err = xml.Unmarshal([]byte(xmlSheetData), &dr.shd)
 			}
 		}
 	}
 
-	return parsedString, err
+	if err == nil {
+		for _, sheetData := range dr.shd.SheetData {
+			// for i, row := range sheetData.Row {
+			for i := dr.rowValue + 1; i < len(sheetData.Row); i++ {
+				row := sheetData.Row[i]
+				rowString := ""
+				for j, col := range row.Col {
+					//fmt.Printf("col %d \n", j)
+					if col.Key == "inlineStr" {
+						sa := []string{rowString, col.InlineStr.Value}
+						rowString = strings.Join(sa, " ")
+					}
+					if col.Key == "n" || col.Key == "" {
+						sa := []string{rowString, col.Value}
+						rowString = strings.Join(sa, " ")
+					}
+					if col.Key == "s" {
+						strngIndex, _ := strconv.ParseInt(col.Value, 10, 64)
+						sa := []string{rowString, dr.sharedStringsValue.SharedString[strngIndex].Text}
+						rowString = strings.Join(sa, " ")
+					}
+					dr.colValue = j
+				}
+				delimiter := "\n"
+				if i == 0 {
+					delimiter = ""
+				}
+				data = strings.Join([]string{data, rowString}, delimiter)
+				dataSize = len([]byte(data))
+				dr.rowValue = i
+				if dataSize >= minSize {
+					goto End
+				}
+			}
+		}
+		dr.rowValue = 0
+		dr.shd = nil
+	}
+
+End:
+	byteData := []byte(data)
+	//fmt.Printf("**** %s **** \n", data)
+	if dr.key == dr.numberOfSheets && dr.rowValue == 0 {
+		dr.err = io.EOF
+	}
+	dr.data = append(dr.data, byteData...)
+	return dataSize, err
 }
