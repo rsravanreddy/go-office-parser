@@ -56,12 +56,12 @@ func TestXlsxParse(t *testing.T) {
 	}
 }
 
-func TestDocxParse(t *testing.T) {
-	path, _ := filepath.Abs("../testdata/demo.docx")
+func TestXlsxParseOutofRange(t *testing.T) {
+	path, _ := filepath.Abs("../testdata/sample.xlsx")
 
-	dr, err := NewDocxReader(path)
+	dr, err := NewXlsxReader(path)
 
-	buf := make([]byte, 4000)
+	buf := make([]byte, 4000000)
 	parsedString := ""
 	var n int
 	for {
@@ -73,6 +73,68 @@ func TestDocxParse(t *testing.T) {
 	}
 	if err == io.EOF {
 		//len := strings.Compare(parsedString, expectedParsedString)
+		if strings.Compare(parsedString, expectedXlsxParsedString) != 0 {
+			t.Error(parsedString, expectedXlsxParsedString)
+		}
+	} else {
+		t.Error(path, err)
+
+	}
+}
+
+func TestXlsxParseSmallReads(t *testing.T) {
+	path, _ := filepath.Abs("../testdata/sample.xlsx")
+
+	dr, err := NewXlsxReader(path)
+
+	buf := make([]byte, 1)
+	parsedString := ""
+	var n int
+	for {
+		n, err = dr.Read(buf)
+		parsedString += string(buf[:n])
+		if err == io.EOF || err != nil {
+			break
+		}
+	}
+	if err == io.EOF {
+		//len := strings.Compare(parsedString, expectedParsedString)
+		if strings.Compare(parsedString, expectedXlsxParsedString) != 0 {
+			t.Error(parsedString, expectedXlsxParsedString)
+		}
+	} else {
+		t.Error(path, err)
+
+	}
+}
+
+func DocxParse(readSize int, path string, dr *DocxReader) (string, *DocxReader, error) {
+
+	var err error
+	if dr == nil {
+		dr, err = NewDocxReader(path)
+	}
+
+	buf := make([]byte, readSize)
+	parsedString := ""
+	var n int
+	for {
+		n, err = dr.Read(buf)
+		parsedString += string(buf[:n])
+		if err == io.EOF || err != nil {
+			break
+		}
+	}
+	return parsedString, dr, err
+}
+
+func TestDocxParse(t *testing.T) {
+	path, _ := filepath.Abs("../testdata/demo.docx")
+
+	parsedString, _, err := DocxParse(4000, path, nil)
+
+	if err == io.EOF {
+		//len := strings.Compare(parsedString, expectedParsedString)
 		if strings.Compare(parsedString, expectedDocParsedString) != 0 {
 			t.Error(parsedString, expectedDocParsedString)
 		}
@@ -80,6 +142,65 @@ func TestDocxParse(t *testing.T) {
 		t.Error(path, err)
 
 	}
+}
+
+func TestDocxParseOutOfRange(t *testing.T) {
+	path, _ := filepath.Abs("../testdata/demo.docx")
+	parsedString, _, err := DocxParse(40000, path, nil)
+
+	if err == io.EOF {
+		//len := strings.Compare(parsedString, expectedParsedString)
+		if strings.Compare(parsedString, expectedDocParsedString) != 0 {
+			t.Error(parsedString, expectedDocParsedString)
+		}
+	} else {
+		t.Error(path, err)
+
+	}
+}
+
+func TestDocxParseSmallReads(t *testing.T) {
+	path, _ := filepath.Abs("../testdata/demo.docx")
+	parsedString, _, err := DocxParse(1, path, nil)
+
+	if err == io.EOF {
+		//len := strings.Compare(parsedString, expectedParsedString)
+		if strings.Compare(parsedString, expectedDocParsedString) != 0 {
+			t.Error(parsedString, expectedDocParsedString)
+		}
+	} else {
+		t.Error(path, err)
+
+	}
+}
+
+func TestDocxParseClose(t *testing.T) {
+	path, _ := filepath.Abs("../testdata/demo.docx")
+	parsedString, dr, err := DocxParse(1, path, nil)
+	olddr := dr
+
+	if err == io.EOF {
+		//len := strings.Compare(parsedString, expectedParsedString)
+		if strings.Compare(parsedString, expectedDocParsedString) != 0 {
+			t.Error(parsedString, expectedDocParsedString)
+		}
+	} else {
+		t.Error(path, err)
+
+	}
+	dr.Close()
+
+	parsedString, dr, err = DocxParse(1, path, dr)
+
+	if dr != olddr {
+		t.Errorf("Received %v  expected %v", dr, olddr)
+
+	}
+
+	if err == nil || err == io.EOF {
+		t.Error(path, err)
+	}
+
 }
 
 func TestDocxParseNofile(t *testing.T) {

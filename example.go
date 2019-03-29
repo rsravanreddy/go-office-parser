@@ -10,41 +10,37 @@ import (
 
 func main() {
 
-	var dr io.Reader
-	dr, _ = parser.NewDocxReader("./testdata/demo.docx")
+	{
+		var dr io.ReadCloser
+		dr, _ = parser.NewDocxReader("./testdata/demo.docx")
 
-	buf := make([]byte, 4000)
-	s := ""
-	for {
-		n, err := dr.Read(buf)
-		s += string(buf[:n])
-		if err == io.EOF {
-			break
+		buf := make([]byte, 4000)
+		s := ""
+		for {
+			n, err := dr.Read(buf)
+			s += string(buf[:n])
+			if err == io.EOF {
+				break
+			}
 		}
-	}
-	fmt.Println(s)
+		fmt.Println(s)
 
-	dr, _ = parser.NewXlsxReader("./testdata/sample.xlsx")
+		dr.Close()
 
-	buf = make([]byte, 4000)
-	s = ""
-	for {
-		n, err := dr.Read(buf)
-		s += string(buf[:n])
-		if err == io.EOF {
-			break
+		dr, _ = parser.NewXlsxReader("./testdata/sample.xlsx")
+
+		buf = make([]byte, 4000)
+		s = ""
+		for {
+			n, err := dr.Read(buf)
+			s += string(buf[:n])
+			if err == io.EOF {
+				break
+			}
 		}
+		fmt.Println(s)
+		dr.Close()
+
 	}
-	fmt.Println(s)
-
-	// res, err := xlsxparser.Parse("./testdata/sample.xlsx")
-	// elapsed := time.Since(start)
-	// log.Printf("parsing took %s", elapsed)
-	// if err == nil {
-	// 	fmt.Println(res)
-	// } else {
-	// 	fmt.Println(err)
-
-	// }
 
 }
