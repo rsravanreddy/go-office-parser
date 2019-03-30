@@ -2,22 +2,22 @@ package parser
 
 import (
 	"archive/zip"
-	"bytes"
 	"encoding/xml"
 	"errors"
 	"io"
-	"log"
 	"strings"
 
 	"github.com/rsravanreddy/go-office-parser/util"
 )
 
 type DocxReader struct {
-	err      error
-	data     []byte
-	offset   int
-	xmlIndex int
-	decoder  *xml.Decoder
+	err           error
+	data          []byte
+	offset        int
+	xmlIndex      int
+	decoder       *xml.Decoder
+	zipReadCloser io.ReadCloser
+	workbookbRc   io.ReadCloser
 }
 
 func NewDocxReader(path string) (*DocxReader, error) {
@@ -52,6 +52,12 @@ func (r *DocxReader) Read(b []byte) (int, error) {
 
 func (r *DocxReader) Close() error {
 	r.err = errors.New("reader already closed")
+	if r.zipReadCloser != nil {
+		r.zipReadCloser.Close()
+	}
+	if r.workbookbRc != nil {
+		r.workbookbRc.Close()
+	}
 	return nil
 }
 
@@ -84,50 +90,28 @@ func (dr *DocxReader) parse(path string) (err error) {
 	if !util.FileExists(path) {
 		return errors.New("file does not exist")
 	}
-	r, err := zip.OpenReader(path)
-	if err != nil || r == nil {
+	zipReadCloser, err := zip.OpenReader(path)
+	if err != nil || zipReadCloser == nil {
 		return err
 	}
-	defer r.Close()
 	if err != nil {
 		return err
 	}
 
-	file := util.RetrieveWordDoc(r.File)
+	file := util.RetrieveWordDoc(zipReadCloser.File)
 
 	if file == nil {
 		return errors.New("file is not valid docx")
 	}
 
-	rc, err := file.Open()
-	if rc != nil {
-		defer rc.Close()
-	}
+	dr.workbookbRc, err = file.Open()
+
+	dr.decoder = xml.NewDecoder(dr.workbookbRc)
+
 	if err != nil {
 		return err
 
 	}
-
-	ByteData, _ := util.ReadFile(rc)
-
-	// read our opened xmlFile as a byte array.
-	byteValue := []byte(ByteData)
-
-	var doc document
-	err = xml.Unmarshal(byteValue, &doc)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	var b body
-
-	err = xml.Unmarshal([]byte(doc.Wp.InnerXML), &b)
-	if err != nil {
-		return errors.New("file is not valid docx")
-
-	}
-
-	dr.decoder = xml.NewDecoder(bytes.NewBufferString(doc.Wp.InnerXML))
 	return err
 }
 
@@ -136,25 +120,55 @@ func (dr *DocxReader) FillFromXml(minSize int) (int, error) {
 	var data string
 	var dataSize int
 	for {
-
-		if dataSize > minSize {
+		var t xml.Token
+		t, err = dr.decoder.Token()
+		if t == nil {
 			break
 		}
-		var t wp
-		err = dr.decoder.Decode(&t)
+		switch se := t.(type) {
+
+		case xml.StartElement:
+			if se.Name.Local == "t" {
+				var rowValue string
+				rowValue, err = dr.collectValues(se.Name.Local)
+				if len(rowValue) > 0 {
+					data = strings.Join([]string{data, rowValue}, " ")
+				}
+			}
+			if len(data) >= minSize {
+				goto End
+			}
+
+		default:
+
+		}
 		if err == io.EOF {
 			break
 		}
-		if err == nil {
-			for _, element := range t.Records {
-				sa := []string{data, element.Value}
-				dataSize += len([]byte(element.Value)) + 1
-				data = strings.Join(sa, " ")
-			}
-		}
+	}
+End:
+	if err == io.EOF {
+		dr.err = io.EOF
 	}
 	byteData := []byte(data)
 	dr.data = append(dr.data, byteData...)
 	dataSize += len(byteData)
 	return dataSize, err
+}
+
+func (dr *DocxReader) collectValues(elem string) (rowString string, err error) {
+	for {
+		var t xml.Token
+		t, err = dr.decoder.Token()
+		if t == nil {
+			break
+		}
+		switch se := t.(type) {
+		case xml.CharData:
+			rowString = string([]byte(se))
+		case xml.EndElement:
+			return rowString, nil
+		}
+	}
+	return rowString, err
 }
