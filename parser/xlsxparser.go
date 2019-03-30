@@ -25,6 +25,8 @@ type XlsxReader struct {
 	shd                *sheetsData
 	zipReader          *zip.ReadCloser
 	numberOfSheets     int
+	sheetDecoder       *xml.Decoder
+	sheetRc            io.ReadCloser
 }
 
 func NewXlsxReader(path string) (*XlsxReader, error) {
@@ -61,7 +63,12 @@ func (r *XlsxReader) Read(b []byte) (int, error) {
 func (r *XlsxReader) Close() error {
 	r.err = errors.New("reader already closed")
 	r.sharedStringsValue.SharedString = nil
-	r.zipReader.Close()
+	if r.zipReader != nil {
+		r.zipReader.Close()
+	}
+	if r.sheetRc != nil {
+		r.sheetRc.Close()
+	}
 	return nil
 }
 
@@ -188,67 +195,130 @@ func (dr *XlsxReader) FillFromXml(minSize int) (dataSize int, err error) {
 }
 
 func (dr *XlsxReader) parseSheet(minSize int) (dataSize int, err error) {
-	var data string
-	if dr.shd == nil {
+	var rowString string
+	if dr.sheetDecoder == nil {
 		f := util.RetrieveSheetWithNumber(dr.zipReader.File, strconv.Itoa(dr.key))
-		var rcc io.ReadCloser
-		rcc, err = f.Open()
-		if rcc != nil {
-			defer rcc.Close()
-		}
+		dr.sheetRc, err = f.Open()
 		if err == nil {
-			xmlSheetData, _ := util.ReadFile(rcc)
-			if dr.shd == nil {
-				err = xml.Unmarshal([]byte(xmlSheetData), &dr.shd)
-			}
+			dr.sheetDecoder = xml.NewDecoder(dr.sheetRc)
 		}
 	}
+	if dr.sheetDecoder != nil {
+		//var inElement string
 
-	if err == nil {
-		for _, sheetData := range dr.shd.SheetData {
-			// for i, row := range sheetData.Row {
-			for i := dr.rowValue + 1; i < len(sheetData.Row); i++ {
-				row := sheetData.Row[i]
-				rowString := ""
-				for j, col := range row.Col {
-					//fmt.Printf("col %d \n", j)
-					if col.Key == "inlineStr" {
-						sa := []string{rowString, col.InlineStr.Value}
-						rowString = strings.Join(sa, " ")
-					}
-					if col.Key == "n" || col.Key == "" {
-						sa := []string{rowString, col.Value}
-						rowString = strings.Join(sa, " ")
-					}
-					if col.Key == "s" {
-						strngIndex, _ := strconv.ParseInt(col.Value, 10, 64)
-						sa := []string{rowString, dr.sharedStringsValue.SharedString[strngIndex].Text}
-						rowString = strings.Join(sa, " ")
-					}
-					dr.colValue = j
+		for {
+			var t xml.Token
+			t, err = dr.sheetDecoder.Token()
+			if t == nil {
+				break
+			}
+			switch se := t.(type) {
+			case xml.StartElement:
+				if se.Name.Local == "row" {
+					var rowValue string
+					rowValue, err = dr.collectCols(se.Name.Local)
+					rowString = strings.Join([]string{rowString, rowValue}, "")
+
 				}
-				delimiter := "\n"
-				if i == 0 {
-					delimiter = ""
-				}
-				data = strings.Join([]string{data, rowString}, delimiter)
-				dataSize = len([]byte(data))
-				dr.rowValue = i
-				if dataSize >= minSize {
+				if len(rowString) >= minSize {
 					goto End
 				}
+				//}
+			default:
+			}
+			if err == io.EOF {
+				dr.sheetDecoder = nil
+				dr.sheetRc.Close()
+				break
 			}
 		}
-		dr.rowValue = 0
-		dr.shd = nil
 	}
 
 End:
-	byteData := []byte(data)
-	//fmt.Printf("**** %s **** \n", data)
-	if dr.key == dr.numberOfSheets && dr.rowValue == 0 {
+	if err == io.EOF {
+		dr.sheetDecoder = nil
+		dr.sheetRc.Close()
+	}
+	byteData := []byte(rowString)
+	if dr.key == dr.numberOfSheets && err == io.EOF {
 		dr.err = io.EOF
 	}
 	dr.data = append(dr.data, byteData...)
 	return dataSize, err
+}
+
+func (dr *XlsxReader) collectCols(elem string) (rowString string, err error) {
+	for {
+		var t xml.Token
+		t, err = dr.sheetDecoder.Token()
+		if t == nil {
+			break
+		}
+		switch se := t.(type) {
+		case xml.StartElement:
+			if se.Name.Local == "c" {
+				var colType string
+				for i := 0; i < len(se.Attr); i++ {
+					if se.Attr[i].Name.Local == "t" {
+						colType = se.Attr[i].Value
+					}
+				}
+				var colValue string
+				colValue, err = dr.collectValues(se.Name.Local, colType)
+				rowString = strings.Join([]string{rowString, colValue}, "")
+			}
+		case xml.EndElement:
+			if se.Name.Local == elem {
+				return rowString, err
+			}
+
+		}
+	}
+
+	return rowString, err
+}
+
+func (dr *XlsxReader) collectValues(elem string, colType string) (rowString string, err error) {
+	for {
+		var t xml.Token
+		t, err = dr.sheetDecoder.Token()
+		if t == nil {
+			break
+		}
+		switch se := t.(type) {
+		case xml.StartElement:
+			if se.Name.Local == "v" {
+				var tt xml.Token
+				tt, err = dr.sheetDecoder.Token()
+				if tt == nil {
+					break
+				}
+				switch cd := tt.(type) {
+				case xml.CharData:
+					str := string([]byte(cd))
+					//fmt.Println(str)
+					if colType == "inlineStr" {
+						sa := []string{rowString, str}
+						rowString = strings.Join(sa, " ")
+					}
+					if colType == "n" || colType == "" {
+						sa := []string{rowString, str}
+						rowString = strings.Join(sa, " ")
+					}
+					if colType == "s" {
+						strngIndex, _ := strconv.ParseInt(str, 10, 64)
+						sa := []string{rowString, dr.sharedStringsValue.SharedString[strngIndex].Text}
+						rowString = strings.Join(sa, " ")
+					}
+					//fmt.Println(rowString)
+				}
+			}
+		case xml.EndElement:
+			if se.Name.Local == "c" {
+				return rowString, err
+			}
+
+		}
+	}
+	return rowString, err
 }
