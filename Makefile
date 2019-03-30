@@ -30,7 +30,8 @@ run: clean build
 	./run 1
 
 test:
-	go test ./*.go
+
+	go test  ./*/
 
 vendor_clean:
 	rm -dRf ./_vendor
