@@ -42,7 +42,7 @@ func main() {
 	fmt.Println(s)
 	dr.Close()
 
-	drr := parser.NewDocReader("./testdata/word-template.doc")
+	drr := parser.NewDocReader("./testdata/test.doc")
 	s = ""
 	for {
 		n, err := drr.Read(buf)
