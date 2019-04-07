@@ -107,7 +107,7 @@ func (dr *DocReader) process(path string) {
 				ptb := make([]byte, 4)
 				_, err = readBytes(entry, 418, 0, ptb)
 				fcClx := binary.LittleEndian.Uint32(ptb)
-				_, err = readBytes(entry, 418, 1, ptb)
+				_, err = entry.Read(ptb)
 				lcbClx := binary.LittleEndian.Uint32(ptb)
 				if lcbClx <= 0 {
 					dr.err = errors.New("invalid doc file")
