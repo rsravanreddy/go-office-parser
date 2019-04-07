@@ -130,7 +130,6 @@ func (dr *DocReader) process(path string) {
 					} else {
 						break
 					}
-
 				}
 				if err == io.EOF || err == nil {
 					break
@@ -201,11 +200,4 @@ func readBytes(file *mscfb.File, offset int64, seek int, b []byte) (i int, err e
 	file.Seek(offset, seek)
 	i, err = file.Read(b)
 	return i, err
-}
-func runesToString(runes []rune) (outString string) {
-	// don't need index so _
-	for _, v := range runes {
-		outString += string(v)
-	}
-	return
 }
