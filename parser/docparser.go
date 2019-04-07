@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -106,9 +107,11 @@ func (dr *DocReader) process(path string) {
 				/****** piece table *********/
 				ptb := make([]byte, 4)
 				_, err = readBytes(entry, 418, 0, ptb)
-				fcClx := binary.LittleEndian.Uint32(ptb)
+				var fcClx int32
+				binary.Read(bytes.NewReader(ptb), binary.LittleEndian, &fcClx)
 				_, err = entry.Read(ptb)
-				lcbClx := binary.LittleEndian.Uint32(ptb)
+				var lcbClx int32
+				binary.Read(bytes.NewReader(ptb), binary.LittleEndian, &lcbClx)
 				if lcbClx <= 0 {
 					dr.err = errors.New("invalid doc file")
 					return
