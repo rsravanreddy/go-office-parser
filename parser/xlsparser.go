@@ -26,7 +26,7 @@ type XlsReader struct {
 	data          []byte
 }
 
-func NewXlsReader(path string) *XlsReader {
+func NewXlsReader(path string) (*XlsReader, error) {
 	xr := &XlsReader{}
 	xr.currentSheet = 0
 	xr.process(path)
@@ -34,7 +34,7 @@ func NewXlsReader(path string) *XlsReader {
 	for i := 0; i < len(xr.sheets); i++ {
 		xr.sheetToPos[i] = xr.sheets[i].FilePos
 	}
-	return xr
+	return xr, xr.err
 }
 
 func (r *XlsReader) Read(b []byte) (int, error) {
@@ -59,10 +59,12 @@ func (r *XlsReader) Read(b []byte) (int, error) {
 
 }
 
-func (r *XlsReader) Close() {
+func (r *XlsReader) Close() error {
 	if r.file != nil {
 		r.file.Close()
 	}
+	return nil
+
 }
 
 var curRecord = 0
