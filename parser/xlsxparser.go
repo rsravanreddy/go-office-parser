@@ -244,7 +244,7 @@ End:
 		dr.err = io.EOF
 	}
 	dr.data = append(dr.data, byteData...)
-	return dataSize, err
+	return len(byteData), err
 }
 
 func (dr *XlsxReader) collectCols(elem string) (rowString string, err error) {
