@@ -42,27 +42,28 @@ func main() {
 	fmt.Println(s)
 	dr.Close()
 
-	drr := parser.NewDocReader("./testdata/test.doc")
+	dr, _ = parser.NewDocReader("./testdata/test.doc")
 	s = ""
 	for {
-		n, err := drr.Read(buf)
+		n, err := dr.Read(buf)
 		s += string(buf[:n])
 		if err == io.EOF {
 			break
 		}
 	}
-	drr.Close()
+	dr.Close()
 	println(s)
 
-	xr := parser.NewXlsReader("./testdata/test.xls")
+	dr, _ = parser.NewXlsReader("./testdata/test.xls")
 	s = ""
 	for {
-		n, err := xr.Read(buf)
+		n, err := dr.Read(buf)
 		s += string(buf[:n])
 		if err == io.EOF {
 			break
 		}
 	}
+	dr.Close()
 	println(s)
 
 }

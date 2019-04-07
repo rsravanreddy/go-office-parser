@@ -22,12 +22,12 @@ type DocReader struct {
 	data        []byte
 }
 
-func NewDocReader(path string) *DocReader {
+func NewDocReader(path string) (*DocReader, error) {
 	dr := &DocReader{}
 	dr.pieceOffset = 0
 	dr.fileMap = make(map[string]*mscfb.File)
 	dr.process(path)
-	return dr
+	return dr, dr.err
 }
 
 func (r *DocReader) Read(b []byte) (int, error) {
@@ -53,10 +53,12 @@ func (r *DocReader) Read(b []byte) (int, error) {
 
 }
 
-func (r *DocReader) Close() {
+func (r *DocReader) Close() error {
 	if r.file != nil {
 		r.file.Close()
 	}
+	return nil
+
 }
 
 func (dr *DocReader) process(path string) {
