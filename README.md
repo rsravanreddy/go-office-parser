@@ -1,6 +1,8 @@
 
 # go-office-parser
 
+Fast streaming parser for docx,xlsx,doc and xls files with minimal foot print.
+
 ### Installing
 This project makes use of Makefile.
 
